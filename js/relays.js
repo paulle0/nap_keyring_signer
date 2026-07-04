@@ -58,9 +58,29 @@ export async function fetchLatest(relays, filter) {
   });
 }
 
+/**
+ * Normalize a relay URL.
+ * Accepts NNS hidden relay format: nns://nrvrelay1…
+ */
 export function normalizeRelayUrl(url) {
   const u = url.trim();
   if (!u) return null;
-  if (!/^wss?:\/\//i.test(u)) return `wss://${u}`;
-  return u;
+  if (/^nns:\/\//i.test(u)) return u;
+  if (/^nrvrelay1/i.test(u)) return `nns://${u}`;
+  return null;
+}
+
+/**
+ * Check if a relay string is an NNS hidden relay.
+ */
+export function isNnsRelay(url) {
+  return typeof url === "string" && /^nns:\/\//i.test(url);
+}
+
+/**
+ * Extract the nrvrelay1… bech32 identifier from an nns:// URL.
+ */
+export function nnsRelayId(url) {
+  if (!isNnsRelay(url)) return null;
+  return url.replace(/^nns:\/\//i, "");
 }
