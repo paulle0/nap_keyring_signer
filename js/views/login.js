@@ -64,11 +64,13 @@ function renderSetupForm(panel) {
     <div class="field">
       <label>Masterkey nsec or hex secret key</label>
       <input id="importKey" class="input mono" placeholder="nsec1… or 64-char hex" autocomplete="off" />
+      <p class="field-hint">Create a secret key e.g. <a href="https://nak.nostr.com/" target="_blank" rel="noopener">here</a> or in other nostr programs.</p>
     </div>
     <div class="field">
       <label>Home relays (nns hidden relays)</label>
       <div id="relayList">${relaysHtml}</div>
       <button class="relay-add" id="relayAdd" type="button">+ add relay</button>
+      <p class="field-hint">Set up a hidden relay for testing e.g. <a href="https://paulle0.github.io/nns_hidden_relay/" target="_blank" rel="noopener">here</a> or in other implementations of nns hidden relays.</p>
     </div>
     <div class="field">
       <label>Vault password</label>
