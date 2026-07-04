@@ -36,7 +36,6 @@
   </nav>
 
   <div class="topbar-actions">
-    <span id="masterIdent" style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-faint);"></span>
     <button class="icon-btn" id="themeToggle" title="Toggle theme">
       <span class="theme-icon-light">☀</span>
       <span class="theme-icon-dark">☾</span>
@@ -85,17 +84,13 @@
     <div class="card key-detail-card" id="keyDetailCard"></div>
   </section>
 
-  <!-- nlogin (tabbed: import / export) -->
+  <!-- nlogin (export only) -->
   <section class="view" data-view="nlogin" hidden>
     <div class="view-header">
       <div>
         <h2 class="view-title">nlogin</h2>
-        <p class="view-sub">Import or export <code>nlogin1…</code> strings for key sharing.</p>
+        <p class="view-sub">Export <code>nlogin1…</code> strings for key sharing.</p>
       </div>
-    </div>
-    <div class="login-tabs" id="nloginTabs" role="tablist">
-      <button class="active" data-tab="import">Import</button>
-      <button data-tab="export">Export</button>
     </div>
     <div id="nloginContent"></div>
   </section>
@@ -112,13 +107,15 @@
 
 <!-- ========== Footer ========== -->
 <footer class="footer">
-  <a href="https://github.com/paulle0/keyring_nip" target="_blank" rel="noopener">keyring nip - this app protocol</a>
+  <a href="https://github.com/paulle0/keyring_nip" target="_blank" rel="noopener">keyring nip</a>
   <span>·</span>
-  <a href="https://github.com/paulle0/noks" target="_blank" rel="noopener">noks - this app code</a>
+  <a href="https://github.com/paulle0/nostr_network_stack_nip" target="_blank" rel="noopener">nns nip</a>
   <span>·</span>
-  <a href="https://github.com/nostr-protocol/nips" target="_blank" rel="noopener">nostr - general main nostr protocol</a>
+  <a href="https://github.com/paulle0/noks" target="_blank" rel="noopener">noks</a>
   <span>·</span>
-  <a href="https://github.com/nbd-wtf/nostr-tools" target="_blank" rel="noopener">nostr-tools - used javascript script</a>
+  <a href="https://github.com/nostr-protocol/nips" target="_blank" rel="noopener">nostr</a>
+  <span>·</span>
+  <a href="https://github.com/nbd-wtf/nostr-tools" target="_blank" rel="noopener">nostr-tools</a>
 </footer>
 
 <!-- ========== Overlays ========== -->
