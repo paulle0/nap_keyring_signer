@@ -11,7 +11,7 @@ export function renderSettings() {
   root.innerHTML = `
     <div class="settings-section">
       <h4>Home relays</h4>
-      <p>These relays receive your kind 17991 / 17992 keyring events.</p>
+      <p>NNS hidden relays that receive your kind 17991 / 17992 keyring events. Use <code>nns://nrvrelay1…</code> format.</p>
       <div id="relaySettingsList">
         ${state.masterkey.homeRelays.map(relayRow).join("")}
       </div>
@@ -81,7 +81,7 @@ function wireNsecReveal(root) {
 
 function relayRow(value = "") {
   return `<div class="relay-row">
-      <input class="input" value="${escapeHtml(value)}" placeholder="wss://relay.example.com" />
+      <input class="input" value="${escapeHtml(value)}" placeholder="nns://nrvrelay1…" />
       <button class="relay-remove" type="button" title="Remove">×</button>
     </div>`;
 }

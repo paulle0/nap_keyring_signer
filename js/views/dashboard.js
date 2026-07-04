@@ -9,8 +9,6 @@ import { fetchExistingKeyring } from "../sync.js";
 export function renderDashboard() {
   renderMasterCard();
   renderKeysGrid();
-  document.getElementById("masterIdent").textContent =
-    `Logged in · ${shortHex(state.masterkey.pubkey, 10, 8)}`;
   wireActions();
 }
 
@@ -82,15 +80,17 @@ function renderMasterCard() {
   const relays = m.homeRelays
     .map((r) => `<span class="relay-pill">${escapeHtml(r)}</span>`).join("");
   document.getElementById("masterCard").innerHTML = `
-    <div class="key-master-label">Masterkey</div>
-    <div class="key-master-name">Root</div>
-    <div class="key-master-npub" title="${escapeHtml(npub)}">bech32: ${escapeHtml(npub)}</div>
-    <div class="key-master-npub" title="${escapeHtml(m.pubkey)}">hex: ${escapeHtml(m.pubkey)}</div>
-    <div class="key-master-relays">${relays || "<span class='relay-pill'>no relays</span>"}</div>
-    <div class="key-master-actions">
-      <button class="link-btn" data-action="refresh-keyring">Refresh keyring</button>
-      <button class="link-btn" data-action="publish-keyring">Publish keyring</button>
-      <button class="link-btn" id="copyNprofile">Copy nprofile</button>
+    <div class="key-master">
+      <div class="key-master-label">Masterkey</div>
+      <div class="key-master-name">Root</div>
+      <div class="key-master-npub" title="${escapeHtml(npub)}">bech32: ${escapeHtml(npub)}</div>
+      <div class="key-master-npub" title="${escapeHtml(m.pubkey)}">hex: ${escapeHtml(m.pubkey)}</div>
+      <div class="key-master-relays">${relays || "<span class='relay-pill'>no relays</span>"}</div>
+      <div class="key-master-actions">
+        <button class="link-btn" data-action="refresh-keyring">Refresh keyring</button>
+        <button class="link-btn" data-action="publish-keyring">Publish keyring</button>
+        <button class="link-btn" id="copyNprofile">Copy nprofile</button>
+      </div>
     </div>`;
   wireActions();
   document.getElementById("copyNprofile").addEventListener("click", (e) => copy(nprofile, e.target));

@@ -1,15 +1,12 @@
-// js/views/login.js — Login / unlock flows
+// js/views/login.js — Login / unlock flows (import-only, no generate)
 import { state, setState } from "../state.js";
 import { hasVault, loadVault, saveVault } from "../storage.js";
-import { generateKeyPair } from "../crypto.js";
 import { hexFromAny } from "../nip19.js";
 import { getPublicKeyHex } from "../crypto.js";
 import { setSessionPassword, persistVault } from "../keyring.js";
 import { toast, escapeHtml } from "../ui-utils.js";
 import { normalizeRelayUrl } from "../relays.js";
 import { fetchExistingKeyring } from "../sync.js";
-
-const DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol"];
 
 export function renderLogin() {
   const root = document.getElementById("loginCard");
@@ -56,34 +53,20 @@ async function doUnlock(root) {
 function renderCreate(root) {
   root.innerHTML = `
     <h2 class="card-title">Set up your signer</h2>
-    <p class="card-subtitle">Generate a new masterkey, or import an existing one.</p>
-    <div class="login-tabs" role="tablist">
-      <button class="active" data-tab="gen">Generate</button>
-      <button data-tab="import">Import</button>
-    </div>
+    <p class="card-subtitle">Import your existing masterkey to get started.</p>
     <div id="loginPanel"></div>`;
-  const panel = root.querySelector("#loginPanel");
-  root.querySelectorAll(".login-tabs button").forEach((b) => {
-    b.addEventListener("click", () => {
-      root.querySelectorAll(".login-tabs button").forEach((x) => x.classList.remove("active"));
-      b.classList.add("active");
-      renderCreatePanel(panel, b.dataset.tab);
-    });
-  });
-  renderCreatePanel(panel, "gen");
+  renderSetupForm(root.querySelector("#loginPanel"));
 }
 
-function renderCreatePanel(panel, tab) {
-  const relaysHtml = DEFAULT_RELAYS.map(relayRow).join("");
-  const importField = tab === "import"
-    ? `<div class="field">
-         <label>Existing nsec or hex secret key</label>
-         <input id="importKey" class="input mono" placeholder="nsec1… or 64-char hex" autocomplete="off" />
-       </div>` : "";
+function renderSetupForm(panel) {
+  const relaysHtml = relayRow("");
   panel.innerHTML = `
-    ${importField}
     <div class="field">
-      <label>Home relays</label>
+      <label>Masterkey nsec or hex secret key</label>
+      <input id="importKey" class="input mono" placeholder="nsec1… or 64-char hex" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Home relays (nns hidden relays)</label>
       <div id="relayList">${relaysHtml}</div>
       <button class="relay-add" id="relayAdd" type="button">+ add relay</button>
     </div>
@@ -92,16 +75,14 @@ function renderCreatePanel(panel, tab) {
       <input id="vaultPw" class="input" type="password" placeholder="Encrypts your local vault" />
       <p class="field-hint">Choose a strong password.</p>
     </div>
-    <button class="btn-primary" id="setupBtn" style="width:100%">
-      ${tab === "import" ? "Import & login" : "Generate & login"}
-    </button>`;
+    <button class="btn-primary" id="setupBtn" style="width:100%">Import & login</button>`;
   wireRelayList(panel);
-  panel.querySelector("#setupBtn").addEventListener("click", () => doSetup(panel, tab));
+  panel.querySelector("#setupBtn").addEventListener("click", () => doSetup(panel));
 }
 
 function relayRow(value = "") {
   return `<div class="relay-row">
-      <input class="input" value="${escapeHtml(value)}" placeholder="wss://relay.example.com" />
+      <input class="input" value="${escapeHtml(value)}" placeholder="nns://nrvrelay1…" />
       <button class="relay-remove" type="button" title="Remove">×</button>
     </div>`;
 }
@@ -115,7 +96,7 @@ function wireRelayList(panel) {
   });
 }
 
-async function doSetup(panel, tab) {
+async function doSetup(panel) {
   const pw = panel.querySelector("#vaultPw").value;
   if (!pw || pw.length < 4) { toast("Choose a password (4+ chars)", "error"); return; }
   const relays = [...panel.querySelectorAll("#relayList .input")]
@@ -123,13 +104,10 @@ async function doSetup(panel, tab) {
   if (relays.length === 0) { toast("Add at least one home relay", "error"); return; }
   let seckey, pubkey;
   try {
-    if (tab === "import") {
-      const raw = panel.querySelector("#importKey").value;
-      seckey = hexFromAny(raw);
-      pubkey = getPublicKeyHex(seckey);
-    } else {
-      ({ seckey, pubkey } = generateKeyPair());
-    }
+    const raw = panel.querySelector("#importKey").value;
+    if (!raw) { toast("Enter your nsec or hex secret key", "error"); return; }
+    seckey = hexFromAny(raw);
+    pubkey = getPublicKeyHex(seckey);
   } catch (e) { toast(e.message, "error"); return; }
 
   const masterkey = { pubkey, seckey, homeRelays: relays };
@@ -137,10 +115,7 @@ async function doSetup(panel, tab) {
   setSessionPassword(pw);
   setState({ masterkey, keyring: [], view: "dashboard" });
   toast("Vault created", "success");
-
-  if (tab === "import") {
-    await fetchAndMergeKeyring(masterkey);
-  }
+  await fetchAndMergeKeyring(masterkey);
 }
 
 async function fetchAndMergeKeyring(masterkey) {
