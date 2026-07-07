@@ -1,9 +1,13 @@
 // js/events.js — Build & sign kind 17991 / 17992 keyring events
 //
-// Spec alignment (keyring_nip):
-//   kind 17991 (public):
-//     tags:    [["P", pubkey], ...]
-//     content: JSON.stringify([{ pubkey, relation, function, delegation }, ...])
+// Spec alignment (keyring_nip, current):
+//   kind 17991 (public rootkey):
+//     tags:    [["l", "rootkey"], ["p", subkeyPub], ...]
+//     content: "" (empty, reserved for future)
+//
+//   kind 17991 (public subkey):
+//     tags:    [["l", "subkey"], ["p", masterkeyPub]]
+//     content: "" (empty)
 //
 //   kind 17992 (private):
 //     tags:    [["encryption", "nip44_v2"]]
@@ -19,28 +23,40 @@ const KIND_PRIVATE = 17992;
 export { KIND_PUBLIC, KIND_PRIVATE };
 
 /**
- * Build a kind 17991 (public keyring) event.
- * entries: [{ relation, pubkey, functions[], delegation? }, ...]
+ * Build a kind 17991 (public keyring) event for a ROOTKEY.
+ * Lists all subkey pubkeys as p-tags, labeled "rootkey".
+ * subkeyPubkeys: string[] — hex pubkeys of subkeys
  */
-export function buildPublicKeyring(publisherSecHex, entries) {
-  const tags = entries.map((e) => ["P", e.pubkey]);
-
-  const content = JSON.stringify(
-    entries.map((e) => ({
-      pubkey: e.pubkey,
-      relation: e.relation,
-      function: e.functions || [],
-      delegation: e.delegation || "",
-    }))
-  );
-
+export function buildRootkeyPublicKeyring(rootkeySecHex, subkeyPubkeys) {
+  const tags = [["l", "rootkey"]];
+  for (const pk of subkeyPubkeys) {
+    tags.push(["p", pk]);
+  }
   const evt = {
     kind: KIND_PUBLIC,
     created_at: Math.floor(Date.now() / 1000),
     tags,
-    content,
+    content: "",
   };
-  return finalizeEvent(evt, hexToBytes(publisherSecHex));
+  return finalizeEvent(evt, hexToBytes(rootkeySecHex));
+}
+
+/**
+ * Build a kind 17991 (public keyring) event for a SUBKEY.
+ * References its single masterkey via a p-tag, labeled "subkey".
+ */
+export function buildSubkeyPublicKeyring(subkeySecHex, masterkeyPubHex) {
+  const tags = [
+    ["l", "subkey"],
+    ["p", masterkeyPubHex],
+  ];
+  const evt = {
+    kind: KIND_PUBLIC,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: "",
+  };
+  return finalizeEvent(evt, hexToBytes(subkeySecHex));
 }
 
 /**

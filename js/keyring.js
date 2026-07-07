@@ -1,6 +1,10 @@
 // js/keyring.js — Orchestrates building+publishing keyring events
 import { state, upsertKey, removeKey } from "./state.js";
-import { buildPublicKeyring, buildPrivateKeyring } from "./events.js";
+import {
+  buildRootkeyPublicKeyring,
+  buildSubkeyPublicKeyring,
+  buildPrivateKeyring,
+} from "./events.js";
 import { publish } from "./relays.js";
 import { saveVault } from "./storage.js";
 
@@ -30,19 +34,20 @@ export async function removeKeyEntry(pubkey) {
 
 /**
  * Publish the masterkey's kind 17991 (public) event.
- * Spec: tags = ["P", pubkey], content = JSON([{pubkey, relation, function, delegation}])
+ * Spec: tags = [["l","rootkey"], ["p", subkey1], ["p", subkey2], ...]
+ *        content = "" (empty)
  */
 export async function publishMasterPublicKeyring() {
   const m = state.masterkey;
   if (!m || !m.seckey) throw new Error("Masterkey secret key required");
-  const entries = state.keyring.map((k) => ({
-    relation: k.relation,
-    pubkey: k.pubkey,
-    functions: k.functions || [],
-    delegation: k.delegation || "",
-  }));
-  const evt = buildPublicKeyring(m.seckey, entries);
-  return publish(evt, m.homeRelays);
+
+  // Collect all subkey pubkeys (relation "S")
+  const subkeyPubkeys = state.keyring
+    .filter((k) => k.relation === "S")
+    .map((k) => k.pubkey);
+
+  const evt = buildRootkeyPublicKeyring(m.seckey, subkeyPubkeys);
+  return publish(evt, m.homeRelays, m);
 }
 
 /**
@@ -59,21 +64,20 @@ export async function publishMasterPrivateKeyring() {
     description: k.description || "",
   }));
   const evt = buildPrivateKeyring(m.seckey, m.pubkey, payload);
-  return publish(evt, m.homeRelays);
+  return publish(evt, m.homeRelays, m);
 }
 
 /**
  * Publish a kind 17991 from the SUBKEY's perspective — the subkey
  * publishes a reference back to its masterkey.
+ * Spec: tags = [["l","subkey"], ["p", masterkeyPub]]
+ *        content = "" (empty)
  */
 export async function publishSubkeyKeyring(subkey) {
   if (!subkey.seckey) throw new Error("Subkey secret key required");
   const m = state.masterkey;
-  const entries = [
-    { relation: "M", pubkey: m.pubkey, functions: ["certify"], delegation: "" },
-  ];
-  const evt = buildPublicKeyring(subkey.seckey, entries);
-  return publish(evt, m.homeRelays);
+  const evt = buildSubkeyPublicKeyring(subkey.seckey, m.pubkey);
+  return publish(evt, m.homeRelays, m);
 }
 
 export function lockSession() {
