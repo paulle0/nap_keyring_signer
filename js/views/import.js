@@ -93,7 +93,6 @@ function showDecodedPreview(root, d) {
       <div class="field"><label>Masterkey reference</label><div class="hex">${escapeHtml(npubFromHex(d.masterPub))}</div></div>
       <div class="field"><label>Relays (${d.relays.length})</label>
         ${d.relays.map((r) => `<div class="hex">${escapeHtml(r)}</div>`).join("") || "<span class='hex'>—</span>"}</div>
-      <div class="field"><label>Kind</label><div class="hex">${d.kind}</div></div>
       <div class="field"><label>Subkey name</label><input id="subName" class="input" placeholder="e.g. Damus client" /></div>
       <div class="field"><label>Description</label><input id="subDesc" class="input" placeholder="optional" /></div>
       <div class="field"><label>Functions</label>

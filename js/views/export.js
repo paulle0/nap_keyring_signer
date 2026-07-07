@@ -63,7 +63,6 @@ async function showExportResult(root, pubkey) {
     subkeyPub: includeSec ? null : key.pubkey,
     relays: state.masterkey.homeRelays,
     masterPub: state.masterkey.pubkey,
-    kind: 17991,
   });
 
   const npub = npubFromHex(key.pubkey);
