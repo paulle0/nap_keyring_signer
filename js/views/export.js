@@ -8,7 +8,7 @@ import { npubFromHex } from "../nip19.js";
 
 export async function renderExport() {
   const root = document.getElementById("exportCard");
-  const keys = state.keyring.filter((k) => k.relation === "S" || k.relation === "O");
+  const keys = state.keyring;
 
   if (keys.length === 0) {
     root.innerHTML = `
@@ -47,9 +47,8 @@ export async function renderExport() {
 function optionHtml(k) {
   const label = k.name || "Untitled key";
   const hint = k.seckey ? "has nsec" : "pubkey only";
-  const rel = k.relation === "S" ? "subkey" : "other";
   return `<option value="${escapeHtml(k.pubkey)}">
-    ${escapeHtml(label)} · ${rel} · ${shortHex(k.pubkey, 8, 6)} (${hint})
+    ${escapeHtml(label)} · subkey · ${shortHex(k.pubkey, 8, 6)} (${hint})
   </option>`;
 }
 

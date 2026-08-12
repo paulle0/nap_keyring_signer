@@ -1,5 +1,5 @@
 // js/views/login.js — Login / unlock flows (import-only, no generate)
-import { state, setState } from "../state.js";
+import { state, setState, normalizeKeyring } from "../state.js";
 import { hasVault, loadVault, saveVault } from "../storage.js";
 import { hexFromAny } from "../nip19.js";
 import { getPublicKeyHex } from "../crypto.js";
@@ -43,7 +43,11 @@ async function doUnlock(root) {
   try {
     const data = await loadVault(pw);
     setSessionPassword(pw);
-    setState({ masterkey: data.masterkey, keyring: data.keyring || [], view: "dashboard" });
+    setState({
+      masterkey: data.masterkey,
+      keyring: normalizeKeyring(data.keyring),
+      view: "dashboard",
+    });
     toast("Welcome back", "success");
   } catch (e) {
     toast(e.message, "error");
@@ -59,18 +63,22 @@ function renderCreate(root) {
 }
 
 function renderSetupForm(panel) {
-  const relaysHtml = relayRow("");
   panel.innerHTML = `
     <div class="field">
       <label>Masterkey nsec or hex secret key</label>
       <input id="importKey" class="input mono" placeholder="nsec1… or 64-char hex" autocomplete="off" />
-      <p class="field-hint">Create a secret key e.g. <a href="https://nak.nostr.com/" target="_blank" rel="noopener">here</a> or in other nostr programs.</p>
+      <p class="field-hint">Create a secret key e.g.
+        <a href="https://nak.nostr.com/" target="_blank" rel="noopener">here</a>
+        or in other nostr programs.</p>
     </div>
     <div class="field">
-      <label>Home relays (nns hidden relays)</label>
-      <div id="relayList">${relaysHtml}</div>
+      <label>Home relays (hidden relays)</label>
+      <div id="relayList">${relayRow("")}</div>
       <button class="relay-add" id="relayAdd" type="button">+ add relay</button>
-      <p class="field-hint">Set up a hidden relay for testing e.g. <a href="https://paulle0.github.io/nns_hidden_relay/" target="_blank" rel="noopener">here</a> or in other implementations of nns hidden relays.</p>
+      <p class="field-hint">Paste an <code>nrvrelay1…</code> string or a
+        <code>nostr+nrv://</code> address. Set up a hidden relay for testing e.g.
+        <a href="https://paulle0.github.io/nap_hidden_relay/" target="_blank" rel="noopener">here</a>
+        or in other implementations.</p>
     </div>
     <div class="field">
       <label>Vault password</label>
@@ -84,7 +92,7 @@ function renderSetupForm(panel) {
 
 function relayRow(value = "") {
   return `<div class="relay-row">
-      <input class="input" value="${escapeHtml(value)}" placeholder="nns://nrvrelay1…" />
+      <input class="input" value="${escapeHtml(value)}" placeholder="nrvrelay1…" />
       <button class="relay-remove" type="button" title="Remove">×</button>
     </div>`;
 }
@@ -103,7 +111,10 @@ async function doSetup(panel) {
   if (!pw || pw.length < 4) { toast("Choose a password (4+ chars)", "error"); return; }
   const relays = [...panel.querySelectorAll("#relayList .input")]
     .map((i) => normalizeRelayUrl(i.value)).filter(Boolean);
-  if (relays.length === 0) { toast("Add at least one home relay", "error"); return; }
+  if (relays.length === 0) {
+    toast("Add at least one hidden relay address", "error");
+    return;
+  }
   let seckey, pubkey;
   try {
     const raw = panel.querySelector("#importKey").value;

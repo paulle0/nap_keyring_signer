@@ -5,6 +5,8 @@ import { shortHex } from "../crypto.js";
 import { escapeHtml, toast, copy } from "../ui-utils.js";
 import { publishMasterPublicKeyring, publishMasterPrivateKeyring, persistVault } from "../keyring.js";
 import { fetchExistingKeyring } from "../sync.js";
+import { shortNrv } from "../nrv.js";
+import { verifyLabel, VERIFIED, MISMATCH, UNCONFIRMED } from "../verify.js";
 
 export function renderDashboard() {
   renderMasterCard();
@@ -21,8 +23,8 @@ function wireActions() {
 }
 
 async function handleAction(action) {
-  if (action === "new-related-key") return openNewRelatedKeyView();
-  if (action === "import-related-key") return openImportRelatedKeyView();
+  if (action === "new-subkey") return setState({ view: "key", _newSubkey: true, _importKey: false });
+  if (action === "import-subkey") return setState({ view: "key", _importKey: true, _newSubkey: false });
   if (action === "back-to-dashboard") {
     return setState({ view: "dashboard", _newSubkey: false, _importKey: false });
   }
@@ -48,6 +50,8 @@ async function refreshKeyring() {
       setState({ keyring: existing });
       await persistVault();
       toast(`Refreshed — ${existing.length} key(s) from relays`, "success");
+      const bad = existing.filter((k) => k.verified === MISMATCH).length;
+      if (bad > 0) toast(`${bad} key(s) do not point back at your masterkey`, "error");
     } else {
       toast("No keyring found on relays", "info");
     }
@@ -65,20 +69,13 @@ function summarizePublish(results, label) {
   else toast(`${label} publish failed — ${results[0]?.error || "all relays rejected"}`, "error");
 }
 
-function openNewRelatedKeyView() {
-  setState({ view: "key", _newSubkey: true, _importKey: false });
-}
-
-function openImportRelatedKeyView() {
-  setState({ view: "key", _importKey: true, _newSubkey: false });
-}
-
 function renderMasterCard() {
   const m = state.masterkey;
   const npub = npubFromHex(m.pubkey);
   const nprofile = nprofileFromHex(m.pubkey, m.homeRelays);
   const relays = m.homeRelays
-    .map((r) => `<span class="relay-pill">${escapeHtml(r)}</span>`).join("");
+    .map((r) => `<span class="relay-pill" title="${escapeHtml(r)}">${escapeHtml(shortNrv(r))}</span>`)
+    .join("");
   document.getElementById("masterCard").innerHTML = `
     <div class="key-master">
       <div class="key-master-label">Masterkey</div>
@@ -122,20 +119,27 @@ function shortNpub(hex) {
   return `${npub.slice(0, 14)}…${npub.slice(-8)}`;
 }
 
+/** Bidirectional verification state, per keyring_nip. */
+export function verifyBadgeHtml(k) {
+  const s = k.verified;
+  const cls = s === VERIFIED ? "ok" : s === MISMATCH ? "bad" : s === UNCONFIRMED ? "warn" : "";
+  const mark = s === VERIFIED ? "✓" : s === MISMATCH ? "✕" : "○";
+  return `<span class="key-verify ${cls}" title="Checks this key's own kind 17991 for a backlink to your masterkey">
+    ${mark} ${escapeHtml(verifyLabel(s))}</span>`;
+}
+
 function keyCardHtml(k) {
-  const funcs = (k.functions || []).map((f) =>
-    `<span class="func-tag">${escapeHtml(f)}</span>`).join("");
   const hasSec = k.seckey
     ? `<span class="key-has-seckey yes">● has nsec</span>`
     : `<span class="key-has-seckey">○ pubkey only</span>`;
   return `<div class="key-card" data-pubkey="${escapeHtml(k.pubkey)}">
       <div class="key-card-head">
-        <span class="key-relation ${k.relation}">${k.relation === "S" ? "subkey" : k.relation === "M" ? "masterkey" : "other"}</span>
+        <span class="key-relation">subkey</span>
         ${hasSec}
       </div>
       <div class="key-name">${escapeHtml(k.name || "Untitled key")}</div>
       <div class="key-desc">${escapeHtml(k.description || "")}</div>
-      <div class="key-functions">${funcs}</div>
+      ${verifyBadgeHtml(k)}
       <div class="key-card-foot">
         <div>bech32: ${escapeHtml(shortNpub(k.pubkey))}</div>
         <div>hex: ${shortHex(k.pubkey, 10, 10)}</div>

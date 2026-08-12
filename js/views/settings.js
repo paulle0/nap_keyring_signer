@@ -1,17 +1,20 @@
 // js/views/settings.js — Manage relays, change password, export nsec, wipe vault
 import { state, setState } from "../state.js";
-import { saveVault } from "../storage.js";
+import { saveVault, clearVault } from "../storage.js";
 import { setSessionPassword, lockSession, persistVault } from "../keyring.js";
-import { normalizeRelayUrl } from "../relays.js";
+import { normalizeRelayUrl, disposeTunnel } from "../relays.js";
+import { toNrvBech32 } from "../nrv.js";
 import { nsecFromHex } from "../nip19.js";
-import { toast, escapeHtml, modal, copy, attachCopy } from "../ui-utils.js";
+import { toast, escapeHtml, modal, attachCopy } from "../ui-utils.js";
 
 export function renderSettings() {
   const root = document.getElementById("settingsCard");
   root.innerHTML = `
     <div class="settings-section">
       <h4>Home relays</h4>
-      <p>Nrv hidden relays that receive your kind 17991 / 17992 keyring events. Use <code>nostr+nrv://...</code> or nrvrelay1... format.</p>
+      <p>Hidden relays that carry your kind 17991 / 17992 keyring events.
+        Paste an <code>nrvrelay1…</code> string or a <code>nostr+nrv://</code>
+        address — both are stored in the canonical URL form.</p>
       <div id="relaySettingsList">
         ${state.masterkey.homeRelays.map(relayRow).join("")}
       </div>
@@ -79,9 +82,12 @@ function wireNsecReveal(root) {
   });
 }
 
+/** Show the bech32 form for editing — it round-trips to the canonical URL. */
 function relayRow(value = "") {
+  let display = value;
+  try { display = value ? toNrvBech32(value) : ""; } catch { display = value; }
   return `<div class="relay-row">
-      <input class="input" value="${escapeHtml(value)}" placeholder="nns://nrvrelay1…" />
+      <input class="input" value="${escapeHtml(display)}" placeholder="nrvrelay1…" />
       <button class="relay-remove" type="button" title="Remove">×</button>
     </div>`;
 }
@@ -96,10 +102,16 @@ function wireRelays(root) {
 }
 
 async function onSaveRelays(root) {
-  const relays = [...root.querySelectorAll("#relaySettingsList .input")]
-    .map((i) => normalizeRelayUrl(i.value)).filter(Boolean);
+  const inputs = [...root.querySelectorAll("#relaySettingsList .input")];
+  const filled = inputs.filter((i) => i.value.trim());
+  const relays = filled.map((i) => normalizeRelayUrl(i.value)).filter(Boolean);
+  if (relays.length !== filled.length) {
+    toast("One address could not be read — check the nrvrelay string", "error");
+    return;
+  }
   if (relays.length === 0) { toast("Keep at least one relay", "error"); return; }
   state.masterkey = { ...state.masterkey, homeRelays: relays };
+  disposeTunnel();
   await persistVault();
   setState({ masterkey: state.masterkey });
   toast("Home relays saved", "success");
@@ -117,12 +129,14 @@ async function onChangePw(root) {
 async function onWipe() {
   const ok = await modal({
     title: "Wipe local vault?",
-    body: `<p>This deletes your encrypted local vault. Published events remain on relays.</p>`,
-    confirmText: "Wipe everything", confirmKind: "danger",
+    body: `<p>This deletes your encrypted local vault. Keyring events already
+      published stay on your relays.</p>`,
+    confirmText: "Wipe vault", confirmKind: "danger",
   });
   if (!ok) return;
-  localStorage.clear();
+  clearVault();
+  disposeTunnel();
   lockSession();
-  toast("Vault wiped", "info");
-  setTimeout(() => location.reload(), 800);
+  setState({ masterkey: null, keyring: [], view: "login", _newSubkey: false, _importKey: false });
+  toast("Local vault wiped", "success");
 }

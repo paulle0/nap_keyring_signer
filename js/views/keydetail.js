@@ -1,15 +1,18 @@
-// js/views/keydetail.js — Inspect a key, generate a new related key
+// js/views/keydetail.js — Inspect a subkey, or route to the new/import forms
 import { state, setState, findKey } from "../state.js";
-import { generateKeyPair, shortHex } from "../crypto.js";
 import { npubFromHex, nsecFromHex } from "../nip19.js";
-import { addKeyEntry, removeKeyEntry } from "../keyring.js";
-import { toast, modal, escapeHtml, attachCopy } from "../ui-utils.js";
-import { renderImportRelatedKeyForm } from "./keyimport.js";
+import { addKeyEntry, publishSubkeyKeyring } from "../keyring.js";
+import { toast, escapeHtml, attachCopy } from "../ui-utils.js";
+import { renderImportSubkeyForm } from "./keyimport.js";
+import { renderNewSubkeyForm } from "./keynew.js";
+import { deleteKeyFlow } from "./revoke.js";
+import { verifyBadgeHtml } from "./dashboard.js";
+import { VERIFIED } from "../verify.js";
 
 export async function renderKeyDetail() {
   const root = document.getElementById("keyDetailCard");
-  if (state._importKey) { renderImportRelatedKeyForm(root); return; }
-  if (state._newSubkey) { renderNewRelatedKeyForm(root); return; }
+  if (state._importKey) { renderImportSubkeyForm(root); return; }
+  if (state._newSubkey) { renderNewSubkeyForm(root); return; }
   const key = findKey(state.selectedKey);
   if (!key) { toast("Key not found"); setState({ view: "dashboard" }); return; }
   renderExistingKey(root, key);
@@ -17,15 +20,14 @@ export async function renderKeyDetail() {
 
 function renderExistingKey(root, key) {
   const npub = npubFromHex(key.pubkey);
-  const delegationDisplay = key.delegation
-    ? `<div class="field"><label>Delegation</label><div class="hex">${escapeHtml(key.delegation)}</div></div>` : "";
 
   root.innerHTML = `
     <div class="detail-head">
       <div id="detailTitle">
         <h2 class="detail-name">${escapeHtml(key.name || "Untitled key")}</h2>
         <p class="card-subtitle" style="margin:0;">
-          <span class="key-relation ${key.relation}">${relLabel(key.relation)}</span>
+          <span class="key-relation">subkey</span>
+          ${verifyBadgeHtml(key)}
           <span id="descDisplay">${key.description ? " · " + escapeHtml(key.description) : ""}</span>
         </p>
       </div>
@@ -40,13 +42,15 @@ function renderExistingKey(root, key) {
         <input id="editName" class="input" value="${escapeHtml(key.name || "")}" placeholder="e.g. Damus iOS" /></div>
       <div class="field"><label>Description</label>
         <input id="editDesc" class="input" value="${escapeHtml(key.description || "")}" placeholder="optional" /></div>
-      <div class="field"><label>Delegation rules</label>
-        <input id="editDelegation" class="input mono" value="${escapeHtml(key.delegation || "")}" placeholder='e.g. kind=1|kind=2' /></div>
+      <p class="field-hint">Name and description live in your kind 17992 event.
+        Republish the keyring to push the change to relays.</p>
       <div style="display:flex; gap:var(--space-2); margin-bottom:var(--space-5);">
         <button class="btn-primary" id="saveEditBtn">Save</button>
         <button class="btn-ghost" id="cancelEditBtn">Cancel</button>
       </div>
     </div>
+
+    ${relationshipBlock(key)}
 
     <div class="detail-section">
       <h4>Identifier</h4>
@@ -61,14 +65,37 @@ function renderExistingKey(root, key) {
           <button class="copy-btn" data-copy="${escapeHtml(key.pubkey)}">Copy</button>
         </div></div>
       ${key.seckey ? secretBlock(key.seckey) : ""}
-      ${delegationDisplay}
     </div>`;
 
   attachCopy(root);
-  root.querySelector("#deleteBtn").addEventListener("click", () => onDelete(key));
+  root.querySelector("#deleteBtn").addEventListener("click", () => deleteKeyFlow(key));
   root.querySelector("#editBtn").addEventListener("click", () => toggleEdit(root, true));
   root.querySelector("#cancelEditBtn").addEventListener("click", () => toggleEdit(root, false));
   root.querySelector("#saveEditBtn").addEventListener("click", () => onSaveEdit(root, key));
+  const backlinkBtn = root.querySelector("#publishBacklinkBtn");
+  if (backlinkBtn) backlinkBtn.addEventListener("click", () => onPublishBacklink(key));
+}
+
+/**
+ * The subkey's own kind 17991 is the half of the relationship the masterkey
+ * cannot publish. When we hold the secret key we can fix an unconfirmed
+ * relationship in one click; when we don't, only its holder can.
+ */
+function relationshipBlock(key) {
+  if (key.verified === VERIFIED) return "";
+  const action = key.seckey
+    ? `<button class="btn-secondary" id="publishBacklinkBtn">Publish subkey backlink</button>`
+    : `<p class="field-hint">You hold no secret key for this subkey, so its
+        holder must publish a kind 17991 naming your masterkey. Send them an
+        <code>nlogin</code> if they need the details.</p>`;
+  return `
+    <div class="detail-section">
+      <h4>Relationship</h4>
+      <p class="field-hint" style="margin-bottom:var(--space-3);">
+        A relationship counts as valid only when this key's own kind 17991
+        points back at your masterkey.</p>
+      ${action}
+    </div>`;
 }
 
 function toggleEdit(root, show) {
@@ -79,10 +106,26 @@ function toggleEdit(root, show) {
 async function onSaveEdit(root, key) {
   const name = root.querySelector("#editName").value.trim();
   const description = root.querySelector("#editDesc").value.trim();
-  const delegation = root.querySelector("#editDelegation").value.trim();
-  await addKeyEntry({ ...key, name, description, delegation });
+  await addKeyEntry({ ...key, name, description });
   toast("Key updated", "success");
   setState({ view: "key", selectedKey: key.pubkey });
+}
+
+async function onPublishBacklink(key) {
+  toast("Publishing subkey backlink…");
+  try {
+    const results = await publishSubkeyKeyring(key);
+    const ok = results.filter((r) => r.ok).length;
+    if (ok > 0) {
+      await addKeyEntry({ ...key, verified: VERIFIED });
+      toast(`Backlink published to ${ok}/${results.length} relays`, "success");
+      setState({ view: "key", selectedKey: key.pubkey });
+    } else {
+      toast(`Backlink failed — ${results[0]?.error || "all relays rejected"}`, "error");
+    }
+  } catch (e) {
+    toast(e.message, "error");
+  }
 }
 
 function secretBlock(sec) {
@@ -94,72 +137,4 @@ function secretBlock(sec) {
         <button class="copy-btn" data-copy="${escapeHtml(nsec)}">Copy</button>
       </div>
     </div>`;
-}
-
-function relLabel(r) {
-  return r === "S" ? "subkey" : r === "M" ? "masterkey" : "other";
-}
-
-async function onDelete(key) {
-  const ok = await modal({
-    title: "Delete this key?",
-    body: `<p>Removes <strong>${escapeHtml(key.name || shortHex(key.pubkey))}</strong> from your local keyring.</p>`,
-    confirmText: "Delete", confirmKind: "danger",
-  });
-  if (!ok) return;
-  await removeKeyEntry(key.pubkey);
-  toast("Key removed", "success");
-  setState({ view: "dashboard" });
-}
-
-function renderNewRelatedKeyForm(root) {
-  const relations = [
-    { value: "S", label: "Subkey", desc: "A delegated key under your masterkey" },
-    { value: "O", label: "Otherkey", desc: "An unrelated key you want to track" },
-    { value: "M", label: "Masterkey", desc: "Another masterkey reference" },
-  ];
-  const relOptions = relations.map((r) =>
-    `<label class="chip-check">
-      <input type="radio" name="relationType" value="${r.value}" ${r.value === "S" ? "checked" : ""} />
-      ${r.label}
-    </label>`
-  ).join("");
-
-  root.innerHTML = `
-    <div class="detail-head"><h2 class="detail-name">New related key</h2></div>
-    <p class="card-subtitle">Generate a fresh keypair and add it to your keyring.</p>
-    <div class="field"><label>Relation type</label>
-      <div class="checkbox-row" id="relationRow">${relOptions}</div>
-      <p class="field-hint" id="relationHint">${relations[0].desc}</p></div>
-    <div class="field"><label>Name</label>
-      <input id="nName" class="input" placeholder="e.g. Damus iOS" /></div>
-    <div class="field"><label>Description</label>
-      <input id="nDesc" class="input" placeholder="optional" /></div>
-    <div class="field"><label>Functions</label>
-      <div class="checkbox-row">
-        ${["signing","certify","encryption","authentication"].map((f) =>
-          `<label class="chip-check"><input type="checkbox" value="${f}"
-            ${f==="signing"?"checked":""}> ${f}</label>`).join("")}
-      </div></div>
-    <div class="field"><label>Delegation rules</label>
-      <input id="nDelegation" class="input mono" placeholder='e.g. kind=1|kind=2 (optional)' /></div>
-    <button class="btn-primary" id="createRelBtn" style="width:100%">Generate key</button>`;
-
-  root.querySelector("#relationRow").addEventListener("change", (e) => {
-    const sel = relations.find((r) => r.value === e.target.value);
-    if (sel) root.querySelector("#relationHint").textContent = sel.desc;
-  });
-
-  root.querySelector("#createRelBtn").addEventListener("click", async () => {
-    const relation = root.querySelector('input[name="relationType"]:checked').value;
-    const name = root.querySelector("#nName").value.trim();
-    const description = root.querySelector("#nDesc").value.trim();
-    const delegation = root.querySelector("#nDelegation").value.trim();
-    const fns = [...root.querySelectorAll(".chip-check input[type=checkbox]:checked")]
-      .map((i) => i.value);
-    const { seckey, pubkey } = generateKeyPair();
-    await addKeyEntry({ relation, pubkey, seckey, name, description, functions: fns, delegation });
-    toast("Key added — ready to share", "success");
-    setState({ view: "key", selectedKey: pubkey, _newSubkey: false });
-  });
 }
