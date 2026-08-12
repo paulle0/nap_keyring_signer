@@ -1,12 +1,18 @@
-// js/nlogin.js — Encode/decode the 'nlogin1...' bech32 TLV string
+// js/nlogin.js — Encode/decode the 'nlogin1…' bech32 TLV string
 //
-// TLV layout (per keyring_nip spec):
-//   0 → 32-byte subkey SECRET key (mutually exclusive with type 4)
-//   1 → relay URL (ASCII bytes), repeatable
+// TLV layout defined by keyring_nip:
+//   0 → 32-byte subkey SECRET key
+//   1 → home relay of the masterkey (ASCII bytes), repeatable — carries the
+//       canonical nostr+nrv:// hidden relay address
 //   2 → 32-byte masterkey public key
-//   4 → 32-byte subkey PUBLIC key (used when secret key not shared)
 //
-// TLV 3 (kind) has been removed — login-program assumes kind 17991.
+// TLV 3 (kind) was removed from the spec; kind 17991 is always implied.
+//
+// TLV 4 → 32-byte subkey PUBLIC key. NOT YET IN THE SPEC. It carries the
+// pubkey-only flow, where the keyring shares a subkey it has no secret for.
+// Decoding stays tolerant of unknown TLVs, so this is forward-compatible
+// either way — but it needs adding to keyring_nip before other
+// implementations will understand it.
 
 import { bech32 } from "../lib/scure-base.js";
 import { hexToBytes, bytesToHex } from "./crypto.js";
@@ -40,8 +46,7 @@ export function encodeNlogin({ subkeySec, subkeyPub, relays = [], masterPub }) {
   if (!subkeySec && subkeyPub) parts.push(writeTLV(4, hexToBytes(subkeyPub)));
 
   const payload = concatBytes(...parts);
-  const words = bech32.toWords(payload);
-  return bech32.encode(PREFIX, words, 5000);
+  return bech32.encode(PREFIX, bech32.toWords(payload), 5000);
 }
 
 export function decodeNlogin(str) {
@@ -61,8 +66,8 @@ export function decodeNlogin(str) {
     else if (t === 4 && v.length === 32) out.subkeyPub = bytesToHex(v);
     // Unknown TLVs are silently ignored
   }
-  if (!out.masterPub) throw new Error("nlogin missing masterkey pubkey");
-  if (!out.subkeySec && !out.subkeyPub) throw new Error("nlogin has no subkey material");
+  if (!out.masterPub) throw new Error("nlogin is missing the masterkey pubkey");
+  if (!out.subkeySec && !out.subkeyPub) throw new Error("nlogin carries no subkey material");
   return out;
 }
 

@@ -4,6 +4,7 @@ import { getThemePref } from "./storage.js";
 import { applyView, wireTopNav } from "./router.js";
 import { toggleTheme } from "./ui-utils.js";
 import { lockSession } from "./keyring.js";
+import { disposeTunnel } from "./relays.js";
 
 function init() {
   const theme = getThemePref();
@@ -15,6 +16,7 @@ function init() {
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
   document.getElementById("logoutBtn").addEventListener("click", () => {
     lockSession();
+    disposeTunnel();
     setState({
       masterkey: null,
       keyring: [],

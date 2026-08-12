@@ -1,11 +1,17 @@
 // js/sync.js — Fetch existing keyring events from relays and merge
 import { fetchLatest } from "./relays.js";
-import { decryptPrivateKeyring, KIND_PUBLIC, KIND_PRIVATE } from "./events.js";
+import {
+  decryptPrivateKeyring,
+  parsePublicKeyring,
+  KIND_PUBLIC,
+  KIND_PRIVATE,
+} from "./events.js";
+import { verifySubkeyBacklinks, UNKNOWN } from "./verify.js";
 
 /**
- * Fetch both public (17991) and private (17992) keyrings in parallel,
- * then merge them by pubkey.
- *   - 17991 provides: relation (from label + p-tags)
+ * Fetch the public (17991) and private (17992) keyrings, merge them by
+ * pubkey, then verify each relationship from the other side.
+ *   - 17991 provides: which keys are in the keyring
  *   - 17992 provides: seckey, name, description
  */
 export async function fetchExistingKeyring(masterkey) {
@@ -17,7 +23,15 @@ export async function fetchExistingKeyring(masterkey) {
     fetchPrivateKeyring(homeRelays, pubkey, seckey, masterkey),
   ]);
 
-  return mergeEntries(pubEntries || [], privEntries || []);
+  const merged = mergeEntries(pubEntries || [], privEntries || []);
+  return attachVerification(masterkey, merged);
+}
+
+async function attachVerification(masterkey, entries) {
+  if (entries.length === 0) return entries;
+  const status = await verifySubkeyBacklinks(masterkey, entries.map((e) => e.pubkey));
+  for (const e of entries) e.verified = status.get(e.pubkey) || UNKNOWN;
+  return entries;
 }
 
 function mergeEntries(pubEntries, privEntries) {
@@ -51,7 +65,12 @@ async function fetchPrivateKeyring(relays, pubkey, seckey, masterkey) {
     if (!event) return null;
     const payload = decryptPrivateKeyring(event, seckey, pubkey);
     if (!Array.isArray(payload)) return null;
-    return payload.map(normalizePrivateEntry);
+    return payload.filter((e) => e && e.pubkey).map((e) => ({
+      ...blankEntry(e.pubkey),
+      seckey: e.seckey || null,
+      name: e.name || "",
+      description: e.description || "",
+    }));
   } catch (e) {
     console.warn("Failed to fetch/decrypt private keyring:", e);
     return null;
@@ -66,7 +85,7 @@ async function fetchPublicKeyring(relays, pubkey, masterkey) {
       limit: 1,
     }, masterkey);
     if (!event) return null;
-    return parsePublicEvent(event);
+    return parseOwnKeyring(event);
   } catch (e) {
     console.warn("Failed to fetch public keyring:", e);
     return null;
@@ -74,65 +93,25 @@ async function fetchPublicKeyring(relays, pubkey, masterkey) {
 }
 
 /**
- * Parse a kind 17991 event using the current spec:
- *   tags: [["l", "rootkey"|"subkey"], ["p", pubkey], ...]
- *   content: "" (empty)
- *
- * The "l" tag determines the publisher's role. All "p" tags are related keys.
- * For a rootkey: all p-tags are subkeys → relation "S"
- * For a subkey: single p-tag is the masterkey → relation "M"
+ * Turn our own kind 17991 into keyring entries. This signer publishes as a
+ * rootkey, so every p-tag on that event is one of our subkeys. An event
+ * labelled anything else is not ours to read as a keyring.
  */
-function parsePublicEvent(event) {
-  const labelTag = event.tags.find((t) => t[0] === "l");
-  const label = labelTag ? labelTag[1] : null;
-  const pTags = event.tags.filter((t) => t[0] === "p" && t[1]);
-
-  if (label === "rootkey") {
-    // Publisher is a rootkey; all p-tags are subkeys
-    return pTags.map((t) => ({
-      pubkey: t[1],
-      relation: "S",
-      seckey: null,
-      name: "",
-      description: "",
-      functions: [],
-      delegation: "",
-    }));
+function parseOwnKeyring(event) {
+  const { role, related } = parsePublicKeyring(event);
+  if (role !== "rootkey") {
+    console.warn(`Own kind 17991 is labelled "${role}" — expected "rootkey"`);
+    return [];
   }
+  return related.map(blankEntry);
+}
 
-  if (label === "subkey") {
-    // Publisher is a subkey; single p-tag is its masterkey
-    return pTags.map((t) => ({
-      pubkey: t[1],
-      relation: "M",
-      seckey: null,
-      name: "",
-      description: "",
-      functions: [],
-      delegation: "",
-    }));
-  }
-
-  // Unknown label — treat p-tags as "other" keys
-  return pTags.map((t) => ({
-    pubkey: t[1],
-    relation: "O",
+function blankEntry(pubkey) {
+  return {
+    pubkey,
     seckey: null,
     name: "",
     description: "",
-    functions: [],
-    delegation: "",
-  }));
-}
-
-function normalizePrivateEntry(e) {
-  return {
-    relation: "S",
-    pubkey: e.pubkey,
-    seckey: e.seckey || null,
-    name: e.name || "",
-    description: e.description || "",
-    functions: [],
-    delegation: "",
+    verified: UNKNOWN,
   };
 }
