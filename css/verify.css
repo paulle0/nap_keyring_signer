@@ -1,0 +1,39 @@
+/* ========== nap · Keyring verification state ========== */
+
+.key-verify {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--space-3);
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+}
+.key-verify.ok {
+  color: var(--success);
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.1);
+}
+.key-verify.warn {
+  color: var(--warning);
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.1);
+}
+.key-verify.bad {
+  color: var(--danger, #f87171);
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+/* Detail view uses the same badge, sitting beside the relation chip */
+.detail-head .key-verify {
+  margin-top: 0;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}

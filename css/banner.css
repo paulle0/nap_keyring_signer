@@ -1,0 +1,21 @@
+/* ========== nap · Experimental test banner ========== */
+
+.test-banner {
+  padding: var(--space-3) var(--space-5);
+  background: color-mix(in oklab, var(--warning) 14%, var(--bg));
+  border-bottom: 1px solid color-mix(in oklab, var(--warning) 40%, transparent);
+  color: var(--warning);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .test-banner {
+    padding: var(--space-3) var(--space-4);
+    font-size: 0.72rem;
+    text-align: left;
+  }
+}
