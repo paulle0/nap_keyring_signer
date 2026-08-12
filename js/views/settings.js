@@ -11,7 +11,7 @@ export function renderSettings() {
   root.innerHTML = `
     <div class="settings-section">
       <h4>Home relays</h4>
-      <p>NNS hidden relays that receive your kind 17991 / 17992 keyring events. Use <code>nns://nrvrelay1…</code> format.</p>
+      <p>Nrv hidden relays that receive your kind 17991 / 17992 keyring events. Use <code>nostr+nrv://...</code> or nrvrelay1... format.</p>
       <div id="relaySettingsList">
         ${state.masterkey.homeRelays.map(relayRow).join("")}
       </div>
